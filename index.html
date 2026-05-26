@@ -60,6 +60,16 @@ input, select {
 }
 input:focus, select:focus { border-color: var(--accent); outline: none; }
 body.dark input, body.dark select { background: #2d3035; border-color: #444; color: white; }
+body.dark #divTroco {
+  background: #1f2937 !important;
+  border: 1px solid #374151;
+  color: #f3f4f6 !important;
+}
+body.dark #divTroco label,
+body.dark #divTroco div,
+body.dark #divTroco span {
+  color: #f3f4f6 !important;
+}
 
 /* BOTOES */
 .btn { padding: 10px 15px; border-radius: 8px; border: 0; cursor: pointer; font-size: 14px; font-weight: 600; color: white; transition: .2s; }
@@ -199,7 +209,7 @@ body.dark .modal-box{background:var(--card-dark);color:var(--text-dark)}
 <header>
   <div>
     <h2 style="margin:0; font-size:1.4rem;">🏪 Sistema de Caixa - Rumspringa Conveniência e Tabacaria</h2>
-    <div style="font-size:0.8rem; opacity:0.9; margin-top:4px;">Dados Salvos Localmente no Navegador (LocalStorage + Firebase REST) • Versão 9.6 Online Firebase</div>
+    <div style="font-size:0.8rem; opacity:0.9; margin-top:4px;">Dados Salvos Localmente no Navegador (LocalStorage + Firebase Beta) • Versão 9.6.1 Online Firebase Beta</div>
   </div>
   <div style="display:flex;gap:8px;align-items:center;"><span id="operatorChip" style="background:rgba(255,255,255,.18);padding:6px 10px;border-radius:999px;font-size:12px;">👤 Sem operador</span><button onclick="toggleTouchMode()" style="background:rgba(255,255,255,0.2); border:0; padding:8px 12px; border-radius:20px; color:white; cursor:pointer;">📱 Touch</button><button onclick="logoutOperador()" style="background:rgba(255,255,255,0.2); border:0; padding:8px 12px; border-radius:20px; color:white; cursor:pointer;">🚪 Sair</button><button onclick="toggleTheme()" style="background:rgba(255,255,255,0.2); border:0; padding:8px 12px; border-radius:20px; color:white; cursor:pointer;">🌗 Tema</button></div>
 </header>
@@ -220,7 +230,7 @@ body.dark .modal-box{background:var(--card-dark);color:var(--text-dark)}
       <button class="menu-btn" onclick="nav('config')">⚙️ Config / Backup</button>
     </div>
     <div style="font-size:0.75rem; color:#888; text-align:center; padding-top:10px; border-top:1px solid #ddd;">
-      Versão 9.6 Online Firebase REST por Mr.Canatto<br>Local + Nuvem · Chrome/Edge/Firefox
+      Versão 9.6.1 Online Firebase Beta por Mr.Canatto<br>Local + Nuvem · Chrome/Edge/Firefox
     </div>
   </nav>
 
@@ -536,8 +546,7 @@ body.dark .modal-box{background:var(--card-dark);color:var(--text-dark)}
                 <button class="btn btn-success" onclick="baixarFirebaseLocalRestV96()">⬇️ 3. Baixar Firebase REST → Local</button>
               </div>
               <div class="cloud-warn-v96">
-                Segurança V9.6: usuários/operadores também sincronizam, mas o sistema não aceita baixar lista vazia ou inválida.
-                Não há exibição de senha ADM nesta tela.
+                Beta híbrido: dados operacionais são mesclados para evitar perdas; configurações administrativas, usuários, PIX/Cupom e taxas são substituídos pelo Firebase ao baixar.
               </div>
               <pre id="cloudLogV96" class="cloud-log-v96"></pre>
             </div>
@@ -670,7 +679,18 @@ function sincronizarPagamentosFiado() {
     localStorage.setItem('pagamentosFiado', JSON.stringify(db.pagamentosFiado));
 }
 
+function limitarAuditoriaV963(){
+    try{
+        const auditAtual = JSON.parse(localStorage.getItem('audit') || '[]');
+        if(Array.isArray(auditAtual) && auditAtual.length > 400){
+            const reduzido = auditAtual.slice(0, 400);
+            localStorage.setItem('audit', JSON.stringify(reduzido));
+        }
+    }catch(e){}
+}
+
 function inicializarSistema() {
+    limitarAuditoriaV963();
     recarregarDB();
     sincronizarPagamentosFiado();
     loadConfig();
@@ -3231,5 +3251,198 @@ window.restore = function(inp){
 };
 </script>
 
+
+<script>
+/* ====== V9.6.2 SEGURANÇA DE SINCRONIZAÇÃO: BAIXAR FIREBASE AGORA MESCLA, NÃO SUBSTITUI ====== */
+function mergeArrayPorIdV962(localArr, remoteArr, fallbackPrefix){
+    const resultado = [];
+    const mapa = new Map();
+
+    function chave(item, idx, origem){
+        if(item && item.id !== undefined && item.id !== null && String(item.id) !== '') return String(item.id);
+        const base = JSON.stringify(item || {});
+        return (fallbackPrefix || 'item') + '_' + origem + '_' + idx + '_' + base;
+    }
+
+    (Array.isArray(remoteArr) ? remoteArr : []).forEach((item, idx) => {
+        mapa.set(chave(item, idx, 'remote'), item);
+    });
+
+    (Array.isArray(localArr) ? localArr : []).forEach((item, idx) => {
+        const k = chave(item, idx, 'local');
+        if(!mapa.has(k)){
+            mapa.set(k, item);
+        }else{
+            const remoto = mapa.get(k) || {};
+            const local = item || {};
+            const dataLocal = new Date(local.atualizadoEm || local.updatedAt || local.data || local.dataLocal || 0).getTime() || 0;
+            const dataRemoto = new Date(remoto.atualizadoEm || remoto.updatedAt || remoto.data || remoto.dataLocal || 0).getTime() || 0;
+            mapa.set(k, dataLocal >= dataRemoto ? local : remoto);
+        }
+    });
+
+    mapa.forEach(v => resultado.push(v));
+    return resultado;
+}
+
+function mergeObjetoV962(localObj, remoteObj){
+    return Object.assign({}, remoteObj || {}, localObj || {});
+}
+
+function validarUsuariosMergeV962(lista){
+    return Array.isArray(lista) && lista.length > 0 && lista.some(u =>
+        u &&
+        String(u.nome || '').trim() &&
+        String(u.senha || '').trim() &&
+        String(u.perfil || '').trim() === 'admin'
+    );
+}
+
+function mesclarDadosFirebaseComLocalV962(dadosRemotos){
+    const keysArray = ['produtos','clientes','vendas','pagamentosFiado','retiradas','fechamentos','audit','usuariosSistema'];
+    const keysObj = ['config','iniciais','configExtra'];
+
+    keysArray.forEach(key => {
+        const localAtual = JSON.parse(localStorage.getItem(key) || '[]');
+        const remoto = Array.isArray(dadosRemotos[key]) ? dadosRemotos[key] : [];
+
+        if(key === 'usuariosSistema'){
+            const mescladoUsuarios = mergeArrayPorIdV962(localAtual, remoto, key);
+            if(!validarUsuariosMergeV962(mescladoUsuarios)){
+                throw new Error('Mesclagem bloqueada: usuários/operadores ficariam sem administrador.');
+            }
+            localStorage.setItem(key, JSON.stringify(mescladoUsuarios));
+            return;
+        }
+
+        const mesclado = mergeArrayPorIdV962(localAtual, remoto, key);
+        localStorage.setItem(key, JSON.stringify(mesclado));
+    });
+
+    keysObj.forEach(key => {
+        const localAtual = JSON.parse(localStorage.getItem(key) || '{}');
+        const remoto = dadosRemotos[key] && typeof dadosRemotos[key] === 'object' ? dadosRemotos[key] : {};
+        localStorage.setItem(key, JSON.stringify(mergeObjetoV962(localAtual, remoto)));
+    });
+}
+
+async function baixarFirebaseLocalRestV96(){
+    clearLogV96();
+    try{
+        statusV96('🟡 Baixando e mesclando dados...', 'sync');
+        logV96('Baixando índice V9.6 com modo seguro de mesclagem...');
+        logV96('Importante: esta versão NÃO substitui seus dados locais. Ela mescla Local + Firebase.');
+        await getDocV96('rumspringa_rest_v96/index');
+
+        const dadosRemotos = {};
+
+        for(const key of CLOUD_KEYS_V96){
+            logV96('Baixando ' + key + '...');
+            const data = await getDocV96('rumspringa_rest_v96/' + key);
+            const raw = readDocJsonStringV96(data);
+            dadosRemotos[key] = JSON.parse(raw);
+        }
+
+        mesclarDadosFirebaseComLocalV962(dadosRemotos);
+
+        if(typeof recarregarDB === 'function') recarregarDB();
+        if(typeof sincronizarPagamentosFiado === 'function') sincronizarPagamentosFiado();
+        if(typeof renderDash === 'function') renderDash();
+        if(typeof renderEstoque === 'function') renderEstoque();
+        if(typeof renderClientes === 'function') renderClientes();
+        if(typeof renderRetiradas === 'function') renderRetiradas();
+        if(typeof renderAudit === 'function') renderAudit();
+        if(typeof renderFechamentos === 'function') renderFechamentos();
+        if(typeof renderUsuarios === 'function') renderUsuarios();
+
+        statusV96('🟢 Dados mesclados com sucesso', 'ok');
+        logV96('✅ Download concluído em modo MESCLAGEM. Nenhum dado local foi substituído integralmente.');
+        alert('Dados baixados e mesclados com sucesso. Vendas locais foram preservadas.');
+    }catch(e){
+        statusV96('🔴 Erro ao baixar/mesclar REST V9.6', 'erro');
+        erroV96('Erro ao baixar/mesclar REST V9.6', e);
+        alert('Erro ao baixar/mesclar REST V9.6. Veja a caixa preta.');
+    }
+}
+</script>
+
+
+<script>
+/* ====== V9.6.3 AJUSTE DE SINCRONIZAÇÃO ======
+   - Dados operacionais: mescla Local + Firebase
+   - Configurações/Usuários/PIX/Lucro: substitui pelo Firebase
+*/
+function mesclarDadosFirebaseComLocalV962(dadosRemotos){
+    const keysOperacionaisMesclar = ['produtos','clientes','vendas','pagamentosFiado','retiradas','fechamentos','audit'];
+    const keysAdministrativasSubstituir = ['config','iniciais','configExtra','usuariosSistema'];
+
+    keysOperacionaisMesclar.forEach(key => {
+        const localAtual = JSON.parse(localStorage.getItem(key) || '[]');
+        const remoto = Array.isArray(dadosRemotos[key]) ? dadosRemotos[key] : [];
+        const mesclado = mergeArrayPorIdV962(localAtual, remoto, key);
+        localStorage.setItem(key, JSON.stringify(mesclado));
+    });
+
+    keysAdministrativasSubstituir.forEach(key => {
+        const remoto = dadosRemotos[key];
+
+        if(key === 'usuariosSistema'){
+            if(!validarUsuariosMergeV962(remoto)){
+                throw new Error('Download bloqueado: usuariosSistema online inválido ou sem administrador.');
+            }
+            localStorage.setItem(key, JSON.stringify(remoto));
+            return;
+        }
+
+        if(remoto !== undefined && remoto !== null){
+            localStorage.setItem(key, JSON.stringify(remoto));
+        }
+    });
+}
+
+async function baixarFirebaseLocalRestV96(){
+    clearLogV96();
+    try{
+        statusV96('🟡 Baixando dados Firebase...', 'sync');
+        logV96('Baixando índice V9.6 com regra híbrida...');
+        logV96('Dados operacionais serão MESCLADOS: vendas, clientes, estoque, pagamentos, retiradas, fechamentos e auditoria.');
+        logV96('Dados administrativos serão SUBSTITUÍDOS pelo Firebase: taxas, usuários, PIX/Cupom, lucro e iniciais.');
+        await getDocV96('rumspringa_rest_v96/index');
+
+        const dadosRemotos = {};
+
+        for(const key of CLOUD_KEYS_V96){
+            logV96('Baixando ' + key + '...');
+            const data = await getDocV96('rumspringa_rest_v96/' + key);
+            const raw = readDocJsonStringV96(data);
+            dadosRemotos[key] = JSON.parse(raw);
+        }
+
+        mesclarDadosFirebaseComLocalV962(dadosRemotos);
+
+        if(typeof recarregarDB === 'function') recarregarDB();
+        if(typeof sincronizarPagamentosFiado === 'function') sincronizarPagamentosFiado();
+        if(typeof renderDash === 'function') renderDash();
+        if(typeof renderEstoque === 'function') renderEstoque();
+        if(typeof renderClientes === 'function') renderClientes();
+        if(typeof renderRetiradas === 'function') renderRetiradas();
+        if(typeof renderAudit === 'function') renderAudit();
+        if(typeof renderFechamentos === 'function') renderFechamentos();
+        if(typeof renderUsuarios === 'function') renderUsuarios();
+        if(typeof loadConfig === 'function') loadConfig();
+
+        statusV96('🟢 Dados sincronizados com regra híbrida', 'ok');
+        logV96('✅ Download concluído.');
+        logV96('✅ Operacional mesclado + administrativo substituído pelo Firebase.');
+        alert('Dados baixados com sucesso. Vendas foram mescladas e configurações/usuários foram atualizados pelo Firebase.');
+    }catch(e){
+        statusV96('🔴 Erro ao baixar/sincronizar REST V9.6', 'erro');
+        erroV96('Erro ao baixar/sincronizar REST V9.6', e);
+        alert('Erro ao baixar/sincronizar REST V9.6. Veja a caixa preta.');
+    }
+}
+</script>
+
 </body>
 </html>
+<!-- Firebase API Key: AIzaSyB6Rzj6BF26v__CJjOZRpgvVqIUkVSuv8M -->
