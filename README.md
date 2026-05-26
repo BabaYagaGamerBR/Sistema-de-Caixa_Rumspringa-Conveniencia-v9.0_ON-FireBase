@@ -210,7 +210,7 @@ Este projeto foi desenvolvido para uso real em comércio/conveniência e continu
 
 # 👨‍💻 Desenvolvido por
 
-### Mr.Canatto
+Desenvolvido e idealizado por Mr.Canatto com apoio de Inteligência Artificial aplicada ao desenvolvimento e arquitetura do sistema.
 
 Sistema de Caixa Rumspringa Conveniência
 Versão 9.6.1 Online Firebase Beta
