@@ -210,7 +210,7 @@ This project was developed for real-world convenience/commercial usage and remai
 
 # 👨‍💻 Developed by
 
-### Mr.Canatto
+Developed and designed by Mr.Canatto with the support of Artificial Intelligence applied to system architecture and development.
 
 Rumspringa Convenience Cash Register System
 Version 9.6.1 Online Firebase Beta
