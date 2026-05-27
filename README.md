@@ -208,7 +208,7 @@ Este projeto foi desenvolvido para uso real em comércio/conveniência e continu
 
 ---
 
-# 👨‍💻 Desenvolvido por
+# 👨‍💻 Desenvolvido por:
 
 Desenvolvido e idealizado por Mr.Canatto com apoio de Inteligência Artificial aplicada ao desenvolvimento e arquitetura do sistema.
 
